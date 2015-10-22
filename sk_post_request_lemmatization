@@ -8,16 +8,16 @@ library("stringi")
 
 #---- file paths ----
 
-src <- "C:\\Users\\Lukas\\Desktop\\x\\" #folder - source files - must have trailing \\
+src <- "C:\\Users\\paste\\source\\folder\\" #folder - source files - must have trailing \\
 
-dest <- "C:\\Users\\Lukas\\Desktop\\x\\x.out\\" #folder - destination files - must have trailing \\
+dest <- "C:\\Users\\paste\\output\\folder\\" #folder - destination files - must have trailing \\
 
 files <- list.files(path = src, 
-                    pattern = "\\.txt$", #load all files with txt extension
-                    full.names = T, 
-                    recursive=F, #search recursively in subfolders
-                    include.dirs=F
-) #load all text documents in src folder
+                      pattern = "\\.txt$", #load all files with txt extension
+                      full.names = T, 
+                      recursive=F, #search recursively in subfolders
+                      include.dirs=F
+                    ) #load all text documents in src folder
 
 filelist <- files #list of document names
 
@@ -30,14 +30,14 @@ lemmatize <- function(j) {
   j.txt <- paste(j.txt, sep=" ", collapse = " ")
   
   
-  j.post <- POST(url = "http://text.fiit.stuba.sk:8080/lematizer/services/lemmatizer/lemmatize/fast",
-                 config = list(),
-                 body = j.txt,
-                 add_headers = ("Content-Type" = "text/plain"),
-                 content_type = ("text/plain"),
-                 handle = NULL
-  )
-  
+  j.post <- POST(url = "http://text.fiit.stuba.sk:8080/lematizer/services/lemmatizer/lemmatize/fast?tools=database&disam=false",
+                config = list(),
+                body = j.txt,
+                add_headers = ("Content-Type" = "text/plain"),
+                content_type = ("text/plain"),
+                handle = NULL
+                )
+                  
   
   j.cont <- parsed_content(j.post,
                            encoding="UTF-8"
@@ -75,7 +75,7 @@ trim <- function(j) {
 #---- execution loop ----
 
 for(j in filelist) {
-  
+
   output <- lemmatize(j) #lemmatize output first
   
   output <- trim(output) #trim and convert output to lowercase ascii text
@@ -84,7 +84,7 @@ for(j in filelist) {
   
   j.name <- basename(j) #get original file name
   
-  write.table(output, 
+  write.table(j.p.trimmed, 
               paste0(dest,
                      j.name,
                      ".lemm.txt" #change name of the original document - append "lem.txt to original name"
@@ -98,5 +98,5 @@ for(j in filelist) {
   t <- runif(1, min=0,max=1) #random number generation
   Sys.sleep(t) #time break in between downloads to prevent downloader being classified as robot attack
   
-  
+
 }
