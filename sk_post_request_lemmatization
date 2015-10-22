@@ -1,0 +1,102 @@
+#---- libraries ----
+
+#install.packages("httr", "tau", "tm", "stringi")
+library("httr")
+library("tau")
+library("tm")
+library("stringi")
+
+#---- file paths ----
+
+src <- "C:\\Users\\Lukas\\Desktop\\x\\" #folder - source files - must have trailing \\
+
+dest <- "C:\\Users\\Lukas\\Desktop\\x\\x.out\\" #folder - destination files - must have trailing \\
+
+files <- list.files(path = src, 
+                    pattern = "\\.txt$", #load all files with txt extension
+                    full.names = T, 
+                    recursive=F, #search recursively in subfolders
+                    include.dirs=F
+) #load all text documents in src folder
+
+filelist <- files #list of document names
+
+#---- custom functions ----
+
+lemmatize <- function(j) {
+  
+  j.txt <- readLines(j,warn=F)
+  
+  j.txt <- paste(j.txt, sep=" ", collapse = " ")
+  
+  
+  j.post <- POST(url = "http://text.fiit.stuba.sk:8080/lematizer/services/lemmatizer/lemmatize/fast",
+                 config = list(),
+                 body = j.txt,
+                 add_headers = ("Content-Type" = "text/plain"),
+                 content_type = ("text/plain"),
+                 handle = NULL
+  )
+  
+  
+  j.cont <- parsed_content(j.post,
+                           encoding="UTF-8"
+  )
+  
+  j.cont <- fixEncoding(j.cont)
+  
+  result <- list(j.cont=j.cont)
+  return(result)
+  
+}
+
+trim <- function(j) {
+  
+  j.trim <- stri_trans_general(j,
+                               "latin-ascii"
+  ) #transliterate - remove accents from text strings
+  
+  j.trim <- removePunctuation(j.trim,
+                              preserve_intra_word_dashes=T
+  ) #remove punctuation - tm package needed
+  
+  j.trim <- stripWhitespace(j.trim) #strip white spaces - tm package needed
+  
+  #j.p.trimmed <- remove_stopwords(j.p.trimmed,stopwords,lines=T) #remove stopwords from the list - tau package needed
+  
+  j.trim <- stri_trans_tolower(j.trim) #conversion to lowercase
+  
+  j.trim <- iconv(j.trim, to="ASCII", sub="")
+  
+  result <- list(j.trim=j.trim)
+  return(result)
+}
+
+#---- execution loop ----
+
+for(j in filelist) {
+  
+  output <- lemmatize(j) #lemmatize output first
+  
+  output <- trim(output) #trim and convert output to lowercase ascii text
+  
+  output <- paste0(output)
+  
+  j.name <- basename(j) #get original file name
+  
+  write.table(output, 
+              paste0(dest,
+                     j.name,
+                     ".lemm.txt" #change name of the original document - append "lem.txt to original name"
+              ), 
+              quote = F, 
+              row.names=F, 
+              col.names=F,
+              eol = "\n",
+              fileEncoding="UTF-8") #save trimmed output
+  
+  t <- runif(1, min=0,max=1) #random number generation
+  Sys.sleep(t) #time break in between downloads to prevent downloader being classified as robot attack
+  
+  
+}
