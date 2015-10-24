@@ -1,12 +1,11 @@
 #---- libraries ----
 
-#install.packages("httr", "tau", "tm", "stringi")
+#install.packages("httr", "tau")
 library("httr")
 library("tau")
-library("tm")
-library("stringi")
 
 #---- file paths ----
+
 
 src <- "C:\\Users\\paste\\source\\folder\\" #folder - source files - must have trailing \\
 
@@ -38,10 +37,10 @@ lemmatize <- function(j) {
                 handle = NULL
                 )
                   
-  
-  j.cont <- parsed_content(j.post,
-                           encoding="UTF-8"
-  )
+  j.cont <- content(j.post,
+                    as="parsed",
+                    encoding="UTF-8"
+                    )
   
   j.cont <- fixEncoding(j.cont)
   
@@ -50,41 +49,17 @@ lemmatize <- function(j) {
   
 }
 
-trim <- function(j) {
-  
-  j.trim <- stri_trans_general(j,
-                               "latin-ascii"
-  ) #transliterate - remove accents from text strings
-  
-  j.trim <- removePunctuation(j.trim,
-                              preserve_intra_word_dashes=T
-  ) #remove punctuation - tm package needed
-  
-  j.trim <- stripWhitespace(j.trim) #strip white spaces - tm package needed
-  
-  #j.p.trimmed <- remove_stopwords(j.p.trimmed,stopwords,lines=T) #remove stopwords from the list - tau package needed
-  
-  j.trim <- stri_trans_tolower(j.trim) #conversion to lowercase
-  
-  j.trim <- iconv(j.trim, to="ASCII", sub="")
-  
-  result <- list(j.trim=j.trim)
-  return(result)
-}
-
 #---- execution loop ----
 
 for(j in filelist) {
 
   output <- lemmatize(j) #lemmatize output first
   
-  output <- trim(output) #trim and convert output to lowercase ascii text
-  
   output <- paste0(output)
   
   j.name <- basename(j) #get original file name
   
-  write.table(j.p.trimmed, 
+  write.table(output, 
               paste0(dest,
                      j.name,
                      ".lemm.txt" #change name of the original document - append "lem.txt to original name"
