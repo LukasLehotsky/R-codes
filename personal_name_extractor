@@ -1,0 +1,60 @@
+##
+#
+# script used as extractor of personal names from long text files
+# used to acquire name of people from dataframe containing several news articles
+# articles were stored in CSV file, with columns title, perex, body
+#
+##
+
+#---- libraries ----
+
+library("stringi") 
+library("tau")
+
+#---- file paths, data sources, input variables ----
+
+setwd("C:\\Users\\Lukas\\Google Drive\\R") #set working directory
+
+t.list <- choose.files() #load file containing articles in machine reaable format
+
+t <- read.table(t.list,header=T,sep=",") #load all articles into dataframe
+
+d.all <- data.frame(name=as.character()) #create empty data.frame for storing all results
+
+r <- "([A-Z][a-z]*\\s)+[A-Z][a-z]*"
+
+#---- custom functions ----
+
+reg.extract <- function(source.text,reg.expression) {
+  regmatches(source.text,
+             gregexpr(reg.expression,
+                      source.text)
+             )
+}
+
+#---- execution loop ----
+
+for(i in 1:nrow(t)) { #loop extracting names from each article and adding them into list of all results
+
+  row <- t[i,] #load article dataframe rows
+  txt <- paste(row$perex,row$body) #merge perex and content
+  txt <- fixEncoding(txt) #fix encoding in case of wrong text import - "tau" package needed ( install.packages("tau") )
+  txt <- stri_trans_general(txt,"latin-ascii") #transliterate UTF-8 to ASCII - "stringi" package needed ( install.packages("stringi") )
+  
+  d.sing <- data.frame(
+    name = unlist(reg.extract(source.text = txt,reg.expression = r))
+  ) #extract Regular expressions and paste them into data.frame
+        
+  d.sing <- unique.data.frame(d.sing) #remove duplicates from article results
+  
+  d.all <- rbind(d.all,d.sing) #add elements to d.all data.frame containing all results
+  
+}
+
+d.all <- unique.data.frame(d.all) #remove duplicates from all results
+
+#---- extract results ----
+
+d.out <- d.all[order(d.all$name),] #convert results into vector and order aplhabetically
+
+write.table(d.out, "result.txt", eol = "\n", row.names = F,col.names = F,quote = F) #save all results
