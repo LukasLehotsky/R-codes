@@ -7,7 +7,10 @@
 # b) text file is loaded, lemmatized and saved in the destination folder
 # c) lemmatized source is transformed into a final lemmatized article and saved in the destination folder
 #
-# cURL downloader is necessary in this solution (standalone version), as articles need to be sent to external server and subsequently harvested
+# lemmatizer - please cite if used:
+# Hajič, Jan, 2014, Czech Morphological Analyzer v1, LINDAT/CLARIN digital library at Institute of Formal and Applied Linguistics, Charles University in Prague, http://hdl.handle.net/11858/00-097C-0000-0023-4336-4.
+#
+#cURL downloader is necessary in this solution (standalone version), as articles need to be sent to external server and subsequently harvested
 #
 ##
 
