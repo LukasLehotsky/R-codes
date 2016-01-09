@@ -1,0 +1,216 @@
+##
+#
+# script used as lemmatizer of Anopress database export
+# used for extraction of articles merged in one XML file
+# articles are
+# a) extracted and body is saved as txt file to the source folder
+# b) text file is loaded, lemmatized and saved in the destination folder
+# c) lemmatized source is transformed into a final lemmatized article and saved in the destination folder
+#
+# cURL downloader is necessary in this solution (standalone version), as articles need to be sent to external server and subsequently harvested
+#
+##
+
+#---- libraries ----
+
+Sys.setlocale("LC_ALL", "Czech") #Locale change in order to assure specific characters are not lost in conversion process
+
+#install.packages("XML", "tau", "jsonlite", "tm")
+
+library("tau")
+library("tm")
+library("XML")
+library("jsonlite")
+
+#---- file and folder paths ----
+
+src <-
+  "C:\\Users\\Lukas\\Google Drive\\R\\cz_lemmatization\\src\\" #folder - source files - must end with trailing \\
+
+dest <-
+  "C:\\Users\\Lukas\\Google Drive\\R\\cz_lemmatization\\dest\\" #folder - destination files - must end with trailing \\
+
+src.xml <-
+  "C:\\Users\\Lukas\\Google Drive\\R\\cz_lemmatization\\src\\econmuni_63816_80962800.xml" #XML source with articles inside
+
+soft  <-
+  "\"C:\\Program Files\\curl\\curl.exe\"" #path to curl.exe - must be enclosed inside of ""
+
+#---- custom functions ----
+
+anopress.trim <- function(j) {
+  #subfunction to erase first line of anopress XML output, as otherwise it is not readable by R
+  
+  j.src <- readLines(j,encoding = "UTF-8",warn = F) # load XML
+  j.src.1 <- j.src[1]
+  
+  if (grepl("xml version",as.character(j.src.1))) {
+    #test if first line contains XML info
+    j.src[1] <- "" #erase the first line
+    
+    write.table(
+      j.src,
+      j,
+      quote = F,
+      row.names = F,
+      col.names = F,
+      eol = "\n",
+      fileEncoding = "UTF-8"
+    ) #save the trimmed XML file
+    
+    rm(j.src,j.src.1) #remove the XML data
+    
+  } else {
+    rm(j.src,j.src.1)
+  } # remove the XML data
+  
+  j.xml <-
+    xmlTreeParse(
+      j,useInternalNodes = T, ignoreBlanks = T, trim = T, encoding = "UTF-8",addFinalizer = T
+    ) # fetch XML source
+  
+  j.b <-
+    xpathSApply(j.xml, "//*//TXTA//text()", simplify = T, xmlValue) # extract article body
+  
+  j.h <-
+    xpathSApply(j.xml, "//*//HDRA//Nazev//text()", simplify = T, xmlValue) # extract article body
+  
+  j.df <-
+    data.frame(id = as.numeric(NA), title = as.character(j.h),txt = as.character(j.b)) # create dataframe with article title and text
+  
+  j.df$id <- rownames(j.df) # fill ID with row numbers
+  
+  j.df$title <-
+    as.character(j.df$title) # convert title to character vector
+  
+  j.df$txt <-
+    as.character(j.df$txt) # convert body to character vector
+  
+  for (i in 1:nrow(j.df)) {
+    row <- j.df[i,]
+    
+    row.txt <- row$txt  #fetch article body
+    
+    row.txt <-
+      fixEncoding(row.txt) #fix encoding issues - package "tau" is needed
+    
+    row.txt <-
+      stripWhitespace(row.txt) #remove excessive whitespace - package "tm" is needed
+    
+    #row.txt <- removePunctuation(row.txt) #remove punctuation - package "tm" is needed
+    
+    write.table(
+      row.txt,
+      paste0(src,"article-id",row$id,".txt"), #change name of the original document - append "lem.txt to original name"),
+      quote = F,
+      row.names = F,
+      col.names = F,
+      eol = "\n",
+      fileEncoding = "UTF-8"
+    )
+  } #save each article separately to source folder
+  
+  write.table(
+    j.df[c(1,2)],
+    paste0(src,"articles-identification.csv"), #change name of the original document - append "lem.txt to original name"),
+    quote = F,
+    row.names = F,
+    col.names = T,
+    sep = ";",
+    eol = "\n",
+    fileEncoding = "UTF-8"
+  ) # save CSV with article IDs and article names
+  
+} # extraction of articles from XML source
+
+curl.dl.lemma <- function(j,s) {
+  j.out <-
+    paste0(dest,basename(j),".c.txt") #curl output file downloaded in working directory
+  
+  system(
+    paste(
+      s, #curl software source
+      "-F", #curl form parameter
+      paste0("data=@\"",j,"\""), #source file
+      "-F convert_tagset=strip_lemma_id", #strip lemma comments
+      "-F output=xml", #output type
+      "--output" , #curl output parameter
+      paste0("\"",j.out,"\""), # output file name
+      " http://lindat.mff.cuni.cz/services/morphodita/api/tag"
+    ),
+    wait = T
+  )
+} # download lemmatized version of the article
+
+lemma.process <- function(j) {
+  j.out <-
+    paste0(dest,basename(j),".c.txt") #curl output file downloaded in working directory
+  
+  j.load <-
+    readLines(j.out,warn = F,encoding = "UTF-8",skipNul = T) #load lemmatized xml file
+  
+  j.json <-
+    fromJSON(j.load, simplifyVector = T,flatten = T) #fetch result as a json structure - package "jsonlite" needed
+  
+  j.json$result <- paste0("<xml>",j.json$result) #prepend xml tag
+  
+  j.json$result <- paste0(j.json$result,"</xml>") #apend xml tag
+  
+  j.xml <-
+    xmlTreeParse(
+      j.json$result, useInternalNodes = TRUE,trim = T,encoding = "UTF-8", error = NULL
+    ) #extract xml results from json file  - package "XML" needed
+  
+  j.lemma <-
+    xpathSApply(j.xml, "//*//token//@lemma") #extract word stems - package "XML" needed
+  
+  j.lemma <-
+    fixEncoding(j.lemma) #fix encoding of word stems - package "tau" needed
+  
+  j.lemma <- unlist(j.lemma)
+  
+  j.lemma <- paste(j.lemma,collapse = " ")
+  
+  file.remove(j.out)
+  
+  result <- list(j.lemma = j.lemma)
+  return(result)
+} # extract lemmas from the downloaded file
+
+sys.wait <- function(min,max) {
+  t <- runif(1, min = min,max = max) #random number generation
+  Sys.sleep(t) #time break in between downloads to prevent downloader being classified as robot attack
+} # pause between iterations function
+
+#---- execution loop ----
+
+anopress.trim(src.xml) # convert XML file into separate articles
+
+files <- list.files(
+  path = src,
+  pattern = "\\.txt$", #load all files with txt extension
+  full.names = T,
+  recursive = F, #search recursively in subfolders
+  include.dirs = F
+) #load all text documents in src folder
+
+filelist <- files #list of document names
+
+for (j in filelist) {
+  curl.dl.lemma(j,soft) #lemmatize articles
+  
+  output <- lemma.process(j) #extract lemmas from output
+  
+  write.table(
+    output,
+    paste0(dest,basename(j),".lem.txt"), #change name of the original document - append "lem.txt to original name"),
+    quote = F,
+    row.names = F,
+    col.names = F,
+    eol = "\n",
+    fileEncoding = "UTF-8"
+  ) #save trimmed output
+  
+  sys.wait(min = 1,max = 3)
+  
+}
