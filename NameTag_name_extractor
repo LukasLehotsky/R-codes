@@ -1,0 +1,122 @@
+##
+#
+# script used for name extraction from articles using name extraction service
+# a) text files are loaded, processed and saved in the destination folder
+# b) processed name source is transformed into a final article and saved in the destination folder
+#
+# cURL downloader is necessary in this solution (standalone version), as articles need to be sent to external server and subsequently harvested
+#
+# NameTag service - please cite and check usage license:
+# Straka, Milan and Straková, Jana, 2014, NameTag, LINDAT/CLARIN digital library at Institute of Formal and Applied Linguistics, Charles University in Prague, http://hdl.handle.net/11858/00-097C-0000-0023-43CE-E.
+#
+##
+
+#---- libraries ----
+
+Sys.setlocale("LC_ALL", "Czech") #Locale change in order to assure specific characters are not lost in conversion process
+
+#install.packages("XML", "tau", "jsonlite", "tm")
+
+library("tau")
+library("tm")
+library("XML")
+library("jsonlite")
+
+#---- file and folder paths ----
+
+src <-
+  "C:\\Users\\Lukas\\Google Drive\\R\\name_xtractor\\src\\" #folder - source files - must end with trailing \\
+
+dest <-
+  "C:\\Users\\Lukas\\Google Drive\\R\\name_xtractor\\dest\\" #folder - destination files - must end with trailing \\
+
+soft  <-
+  "\"C:\\Program Files\\curl\\curl.exe\"" #path to curl.exe - must be enclosed inside of ""
+
+#---- custom functions ----
+
+curl.dl.nameextr <- function(j,s) {
+  j.out <-
+    paste0(dest,basename(j),".c.txt") #curl output file downloaded in working directory
+  
+  system(
+    paste(
+      s, #curl software source
+      "-F", #curl form parameter
+      paste0("data=@\"",j,"\""), #source file
+      "--output" , #curl output parameter
+      paste0("\"",j.out,"\""), # output file name
+      " http://lindat.mff.cuni.cz/services/nametag/api/recognize"
+    ),
+    wait = T
+  )
+} # download json-wrapped xml version of the article
+
+nameex.process <- function(j) {
+  j.out <-
+    paste0(dest,basename(j),".c.txt") #curl output file downloaded in working directory
+  
+  j.load <-
+    readLines(j.out,warn = F,encoding = "UTF-8",skipNul = T) #load lemmatized xml file
+  
+  j.json <-
+    fromJSON(j.load, simplifyVector = T,flatten = T) #fetch result as a json structure - package "jsonlite" needed
+  
+  j.json$result <- paste0("<xml>",j.json$result) #prepend xml tag
+  
+  j.json$result <- paste0(j.json$result,"</xml>") #apend xml tag
+  
+  j.xml <-
+    xmlTreeParse(
+      j.json$result, useInternalNodes = TRUE,trim = T,encoding = "UTF-8", error = NULL
+    ) #extract xml results from json file  - package "XML" needed
+  
+  j.nameex <-
+    xpathSApply(j.xml, "//*//ne",xmlValue) #extract names - package "XML" needed
+  
+  j.nameex <-
+    fixEncoding(j.nameex) #fix encoding of names - package "tau" needed
+  
+  j.nameex <- unlist(j.nameex)
+  
+  file.remove(j.out)
+  
+  result <- list(j.nameex = j.nameex)
+  return(result)
+} # extract names from the downloaded file
+
+sys.wait <- function(min,max) {
+  t <- runif(1, min = min,max = max) #random number generation
+  Sys.sleep(t) #time break in between downloads to prevent downloader being classified as robot attack
+} # pause between iterations function
+
+#---- execution loop ----
+
+files <- list.files(
+  path = src,
+  pattern = "\\.txt$", #load all files with txt extension
+  full.names = T,
+  recursive = F, #search recursively in subfolders
+  include.dirs = F
+) #load all text documents in src folder
+
+filelist <- files #list of document names
+
+for (j in filelist) {
+  curl.dl.nameextr(j,soft) #extract names from loaded articles
+  
+  output <- nameex.process(j) #process names from downloaded output
+  
+  write.table(
+    output,
+    paste0(dest,basename(j),".extr.txt"), #change name of the original document - append "extr.txt" to original name
+    quote = F,
+    row.names = F,
+    col.names = F,
+    eol = "\n",
+    fileEncoding = "UTF-8"
+  ) #save trimmed output
+  
+  sys.wait(min = 1,max = 3)
+  
+}
